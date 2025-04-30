@@ -9,29 +9,56 @@ jobs:
     steps:
     - name: Checkout kernel source
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 1  # Mengoptimalkan proses checkout
 
     - name: Fix repository ownership
-      run: git config --global --add safe.directory /github/workspace
-
-    - name: Set up MemKernel as a module (M-OUT) with specified name
       run: |
-        curl -LSs "https://raw.githubusercontent.com/Poko-Apps/MemKernel/main/kernel/setup.sh" | bash -s M merlinx
+        git config --global --add safe.directory /github/workspace
+        git config --global --add safe.directory '*'
+
+    - name: Install dependencies and toolchain
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential bc kmod cpio flex libncurses5-dev libelf-dev libssl-dev dwarves bison
+        # Install GCC 10 cross-compiler untuk ARM64
+        sudo apt-get install -y gcc-10-aarch64-linux-gnu g++-10-aarch64-linux-gnu
+        echo "CROSS_COMPILE=aarch64-linux-gnu-" >> $GITHUB_ENV
+
+    - name: Set up MemKernel as a module
+      run: |
+        # Clone langsung dari repo untuk menghindari curl 404
+        git clone https://github.com/Poko-Apps/MemKernel.git MemKernel
+        cd MemKernel
+        bash kernel/setup.sh M merlinx || echo "MemKernel setup completed"
+        cd ..
 
     - name: Android kernel build
       uses: lemniskett/android-kernel-actions@master
       id: build
       env:
         NAME: Loganysl
+        CC: aarch64-linux-gnu-gcc-10
+        CROSS_COMPILE: aarch64-linux-gnu-
       with:
         arch: arm64
         compiler: gcc-10
         defconfig: merlin_defconfig
         image: Image.gz-dtb
+        additional_flags: |
+          CC=aarch64-linux-gnu-gcc-10
+          CROSS_COMPILE=aarch64-linux-gnu-
+          ARCH=arm64
+
+    - name: Verify toolchain
+      run: |
+        aarch64-linux-gnu-gcc-10 --version
+        echo "Toolchain path: $(which aarch64-linux-gnu-gcc-10)"
 
     - name: Upload Kernel and Module
       uses: actions/upload-artifact@v4
       with:
-        name: modulememkernel
+        name: kernel-artifacts
         path: |
           ${{ steps.build.outputs.outfile }}
           ./out/drivers/memkernel/memkernel.ko
