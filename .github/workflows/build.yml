@@ -15,7 +15,7 @@ jobs:
 
     - name: Set up MemKernel as a module (M-OUT) with specified name
       run: |
-        curl -LSs "https://raw.githubusercontent.com/Poko-Apps/MemKernel/main/kernel/setup.sh" | bash -s M dogi
+        curl -LSs "https://raw.githubusercontent.com/Poko-Apps/MemKernel/main/kernel/setup.sh" | bash -s M merlinx
 
     - name: Android kernel build
       uses: lemniskett/android-kernel-actions@master
@@ -24,7 +24,7 @@ jobs:
         NAME: Loganysl
       with:
         arch: arm64
-        compiler: gcc/12
+        compiler: gcc-10
         defconfig: merlin_defconfig
         image: Image.gz-dtb
 
