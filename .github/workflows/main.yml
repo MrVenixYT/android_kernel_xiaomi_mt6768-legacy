@@ -9,77 +9,29 @@ jobs:
     steps:
     - name: Checkout kernel source
       uses: actions/checkout@v4
-      with:
-        fetch-depth: 1
-
-    - name: Fix repository ownership
+      
+     - name: Fix repository ownership
       run: git config --global --add safe.directory /github/workspace
 
-    - name: Install dependencies
+    - name: Set up MemKernel as a module (M-OUT) with specified name
       run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential bc kmod cpio flex libncurses5-dev libelf-dev libssl-dev dwarves bison git gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
+        curl -LSs "https://raw.githubusercontent.com/Poko-Apps/MemKernel/main/kernel/setup.sh" | bash -s M dogi
 
-    - name: Setup proper toolchain
-      run: |
-        mkdir -p toolchain
-        # Toolchain utama (AArch64)
-        wget https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/heads/android12-release.tar.gz -O toolchain-aarch64.tar.gz
-        tar -xzf toolchain-aarch64.tar.gz -C toolchain
-        rm toolchain-aarch64.tar.gz
-        
-        # Toolchain ARM32 untuk compat
-        wget https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9/+archive/refs/heads/android12-release.tar.gz -O toolchain-arm.tar.gz
-        tar -xzf toolchain-arm.tar.gz -C toolchain
-        rm toolchain-arm.tar.gz
-        
-        echo "$(pwd)/toolchain/bin" >> $GITHUB_PATH
-
-    - name: Clone and setup MemKernel
-      run: |
-        git clone https://github.com/Poko-Apps/MemKernel.git MemKernel
-        if [ -f MemKernel/kernel/setup.sh ]; then
-          bash MemKernel/kernel/setup.sh M dogi
-        else
-          echo "MemKernel setup.sh not found, using manual setup"
-          mkdir -p drivers/memkernel
-          cp MemKernel/*.[ch] drivers/memkernel/ || true
-          [ -f MemKernel/Makefile ] && cp MemKernel/Makefile drivers/memkernel/
-          [ -f MemKernel/Kconfig ] && cp MemKernel/Kconfig drivers/memkernel/
-          echo "obj-y += memkernel/" >> drivers/Makefile
-          echo "CONFIG_MEMKERNEL=y" >> arch/arm64/configs/merlin_defconfig
-          # Fix dependency warnings
-          echo "CONFIG_HAS_IOMEM=y" >> arch/arm64/configs/merlin_defconfig
-          echo "CONFIG_BACKLIGHT_LCD_SUPPORT=y" >> arch/arm64/configs/merlin_defconfig
-        fi
-
-    - name: Build Android kernel
+    - name: Android kernel build
+      uses: lemniskett/android-kernel-actions@master
+      id: build
       env:
-        ARCH: arm64
-        CROSS_COMPILE: aarch64-linux-android-
-        CROSS_COMPILE_ARM32: arm-linux-androideabi-
-        PATH: ${{ github.workspace }}/toolchain/bin:$PATH
-      run: |
-        # Bersihkan konfigurasi sebelumnya
-        make O=out clean
-        
-        # Buat defconfig dengan fix warning
-        make O=out merlin_defconfig
-        
-        # Build kernel
-        make -j$(nproc --all) O=out \
-          CC=aarch64-linux-android-gcc \
-          LD=aarch64-linux-android-ld \
-          AR=aarch64-linux-android-ar \
-          NM=aarch64-linux-android-nm \
-          OBJCOPY=aarch64-linux-android-objcopy \
-          OBJDUMP=aarch64-linux-android-objdump \
-          STRIP=aarch64-linux-android-strip
+        NAME: Loganysl
+      with:
+        arch: arm64
+        compiler: gcc/12
+        defconfig: your_defconfig
+        image: Image.gz-dtb
 
     - name: Upload Kernel and Module
       uses: actions/upload-artifact@v4
       with:
-        name: kernel-artifacts
+        name: module
         path: |
-          out/arch/arm64/boot/Image.gz-dtb
-          out/drivers/memkernel/memkernel.ko
+          ${{ steps.build.outputs.outfile }}
+          ./out/drivers/memkernel/memkernel.ko
