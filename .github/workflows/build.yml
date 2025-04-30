@@ -24,7 +24,7 @@ jobs:
         NAME: Loganysl
       with:
         arch: arm64
-        compiler: gcc/13
+        compiler: gcc/12
         defconfig: merlin_defconfig
         image: Image.gz-dtb
 
